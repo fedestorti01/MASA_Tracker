@@ -1,0 +1,9 @@
+train: C:\Users\marco\Dropbox\Code\PYTHON\MASATracker\train_data\images\train
+val: C:\Users\marco\Dropbox\Code\PYTHON\MASATracker\train_data\images\val
+names:
+  0: car
+  1: bus
+  2: bicycle
+  3: person
+  4: motorbike
+  5: electric scooter

@@ -1,0 +1,7 @@
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+ultralytics
+opencv-python
+deep_sort_realtime
+tensorflow
+gdown
+torchreid 

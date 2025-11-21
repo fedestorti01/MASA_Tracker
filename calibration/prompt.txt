@@ -1,0 +1,14 @@
+Create an application using opencv to display to 2 images next to each other. The images should be as large as possible (use all the window).
+However the must divide the screen in two exact halves.
+I can select mathcing points on the two images, by clicking one point in the first image and one point on the other images. These two points become a pair.
+In the bottom there are buttons to control the application:
+1. load the image on the first panel
+2. load the image ont on the second panel
+3. add/create matching points
+4. finish and export the matching points
+
+
+Add another button to compute the homography between the two  set of points. 
+Refer to file findHomography.py lines 164-190.
+Once the homograpgy has been computed. Moving the mouse on the first image, I see the associated point on the second image.
+refer to file findHomography.py lines 20-50
