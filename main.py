@@ -60,7 +60,7 @@ class CalibrationData:
             print(f" File di calibrazione non trovato: {json_path}")
             raise SystemExit(1)
 
-        ### Load JGW data
+        ### Carica JGW
         jgw_path = f'calibration/map_{self.camera}.jgw'
         try:
             with open(jgw_path, 'r') as f:
@@ -135,8 +135,7 @@ def tracking_mode(args: argparse.Namespace) -> str:
     elif args.botsort:
         return "botsort"
     else:
-        print("ERRORE: Nessun algoritmo di tracking specificato!")
-        print("Usa uno dei seguenti flag: -deepsort, -kalman, -bytetrack, -botsort")
+        print("Use: -deepsort, -kalman, -bytetrack, -botsort")
         raise SystemExit(1)
 
 def initialize_tracker(config: Config):
