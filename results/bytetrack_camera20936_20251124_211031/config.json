@@ -1,0 +1,16 @@
+{
+  "camera": "20936",
+  "tracking_mode": "bytetrack",
+  "yolo_model_path": "trained_models/yolov8m-tuned.pt",
+  "deepsort_model_path": "trained_models/mars-small128.pb",
+  "detection_threshold": 0.8,
+  "duration": 30,
+  "rtsp_url": "",
+  "gui": true,
+  "start_time": "2025-11-24T21:10:31.977002",
+  "video_source": "videos\\video_20936_20230920_133523.mp4",
+  "resolution": [
+    1920,
+    1080
+  ]
+}

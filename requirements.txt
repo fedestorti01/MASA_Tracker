@@ -4,4 +4,5 @@ opencv-python
 deep_sort_realtime
 tensorflow
 gdown
-torchreid 
+torchreid
+pandas

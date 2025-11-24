@@ -6,8 +6,8 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
+from datetime import datetime
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import psutil
 from ultralytics import YOLO
@@ -15,6 +15,8 @@ from deepsort_utils import DeepSortWrapper
 from deepsort_utils_kalman import KalmanWrapper
 from bytetrack_utils import ByteTrackWrapper
 from botsort_utils import BotSORTWrapper
+from plot_metrics import generate_performance_plots_from_csv
+from session_manager import SessionManager, SessionConfig
 
 DETECTION_THRESHOLD = 0.8
 DISPLAY_W = 1920
@@ -40,7 +42,6 @@ class CalibrationData:
         self._load_calibration()
 
     def _load_calibration(self):
-        ### Carica matrice di omografia da JSON
         json_path = f'calibration/calib_{self.camera}.json'
 
         try:
@@ -59,7 +60,7 @@ class CalibrationData:
             print(f"File di calibrazione non trovato: {json_path}")
             raise SystemExit(1)
 
-        ### Carica JGW
+        # Carica JGW
         jgw_path = f'calibration/map_{self.camera}.jgw'
         try:
             with open(jgw_path, 'r') as f:
@@ -69,22 +70,21 @@ class CalibrationData:
                 self.jgw_data[letter] = float(line.strip())
 
         except FileNotFoundError:
-            print(f"JGW file non trovato: {jgw_path}")  # FIX: aggiunto f-string
+            print(f"JGW file non trovato: {jgw_path}")
             raise SystemExit(1)
 
-    def project_to_map(self, x: int, y: int) -> Tuple[float, float]:
-        ### Applica omografia per trasformare coordinate pixel in pixel su mappa
+    def project_to_map(self, x: int, y: int) -> Tuple[float, float, Tuple[int, int]]:
+        # Applica omografia per trasformare coordinate pixel in pixel su mappa
         point = np.array([[[x, y]]], dtype=np.float32)
         projected = cv2.perspectiveTransform(point, self.homography_matrix)
         px, py = np.round(projected[0][0]).astype(int)
 
-        ### Converte pixel in coordinate geografiche
+        # Converte pixel in coordinate geografiche
         lon = round(self.jgw_data['A'] * px + self.jgw_data['B'] * py + self.jgw_data['C'], 6)
         lat = round(self.jgw_data['D'] * px + self.jgw_data['E'] * py + self.jgw_data['F'], 6)
         return lat, lon, (px, py)
 
 class VideoProcessor:
-    ### Gestione automatica di apertura e chiusura video
     def __init__(self, source: str):
         self.cap = cv2.VideoCapture(source)
         if not self.cap.isOpened():
@@ -105,7 +105,6 @@ class VideoProcessor:
         }
 
 def parse_arguments() -> argparse.Namespace:
-    ### Lettura dei parametri da linea di comando
     parser = argparse.ArgumentParser(description="Multi-algorithm Object Tracking")
     parser.add_argument("-camera", type=str, default="20936", help="Name of the camera")
     parser.add_argument("-rtsp", type=str, default="", help="RTSP URL (if not set, use video file)")
@@ -118,10 +117,10 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("-deepsort_model_path", type=str, default="trained_models/mars-small128.pb", help="Path to DeepSORT model")
     parser.add_argument("-duration", type=int, default=30, help="Durata processing in secondi (0 = infinito)")
     parser.add_argument("-save", action="store_true", help="Salva i grafici dopo averli visualizzati")
+    parser.add_argument("-no-plots", action="store_true", help="Non generare grafici al termine (solo CSV)")
     return parser.parse_args()
 
 def tracking_mode(args: argparse.Namespace) -> str:
-    ### Indica quale algoritmo usare in base ai flag
     if args.deepsort:
         return "deepsort"
     elif args.bytetrack:
@@ -171,6 +170,7 @@ def initialize_tracker(config: Config):
         raise ValueError(f"Modalità tracking non supportata: {config.tracking_mode}")
 
 def get_video_source(camera: str, rtsp_url: str) -> str:
+
     if rtsp_url:
         return rtsp_url
 
@@ -180,7 +180,9 @@ def get_video_source(camera: str, rtsp_url: str) -> str:
 
     return os.path.join("videos", video_files[0])
 
+
 def get_camera_resolution(camera: str) -> Tuple[int, int]:
+
     img_path = f'calibration/camera_{camera}.jpg'
 
     if not os.path.exists(img_path):
@@ -197,11 +199,11 @@ def process_yolo_detections(
         detection_threshold: float,
         class_names: Dict[int, str]
 ) -> Tuple[List, Dict]:
+
     detections = []
     yolo_conf_map = {}
 
     for r in results:
-        ### Estrae detection da YOLO
         for box in r.boxes.data.tolist():
             if len(box) == 6:
                 x1, y1, x2, y2, conf, class_id = box
@@ -219,6 +221,7 @@ def process_yolo_detections(
     return detections, yolo_conf_map
 
 def update_tracker(tracker, tracking_mode: str, frame, detections, results):
+
     if tracking_mode in ["deepsort", "kalman"]:
         tracker.update(frame, detections)
         return tracker.tracks
@@ -230,7 +233,7 @@ def update_tracker(tracker, tracking_mode: str, frame, detections, results):
     return []
 
 def extract_track_info(track, tracking_mode: str, class_names: Dict, yolo_conf_map: Dict):
-    # Tutti i wrapper ora ritornano oggetti Track con attributi uniformi
+
     if not hasattr(track, 'bbox') or not hasattr(track, 'track_id'):
         return None
 
@@ -254,20 +257,22 @@ def extract_track_info(track, tracking_mode: str, class_names: Dict, yolo_conf_m
     }
 
 def draw_detection(frame, map_img, track_info: Dict, projected_point: Tuple, label: str):
-    ### Disegni su video e mappa
+
     color = (0, 255, 0)
     x1, y1, x2, y2 = track_info['bbox']
     base_x, base_y = track_info['base_point']
     px, py = projected_point
 
+    # Disegno sul frame video
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-    cv2.putText(frame, label, (x1, y1 - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+    cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
     cv2.circle(frame, (base_x, base_y), 5, (0, 255, 0), -1)
 
+    # Disegno sulla mappa
     cv2.circle(map_img, (px, py), 30, color, -1)
     cv2.putText(map_img, label, (px + 30, py - 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 2, color, 3)
+
 
 def create_dual_display(
         frame: np.ndarray,
@@ -275,7 +280,7 @@ def create_dual_display(
         window_width: int = DISPLAY_W,
         window_height: int = DISPLAY_H
 ) -> np.ndarray:
-    ### Creo visualizzazione video|mappa
+
     half_width = window_width // 2
 
     frame_resized = cv2.resize(frame, (half_width, window_height))
@@ -283,138 +288,12 @@ def create_dual_display(
 
     combined = np.hstack([frame_resized, map_resized])
 
-    cv2.line(combined, (half_width, 0), (half_width, window_height),
-             (255, 255, 255), 2)
+    cv2.line(combined, (half_width, 0), (half_width, window_height),(255, 255, 255), 2)
 
-    cv2.putText(combined, "Video", (20, 40),
-                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
-    cv2.putText(combined, "Mappa", (half_width + 20, 40),
-                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
+    cv2.putText(combined, "Video", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
+    cv2.putText(combined, "Mappa", (half_width + 20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
 
     return combined
-
-def plot_metric(data: List, config: Dict, model_name: str, tracking_mode: str, save_plots: bool = False):
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(config['x'], config['y'],
-            marker=config.get('marker', 'o'),
-            linestyle='-',
-            color=config['color'],
-            label=config['label'])
-
-    if config.get('mean'):
-        mean_val = np.mean(config['y'])
-        ax.axhline(mean_val, color='red', linestyle='--', linewidth=2,
-                   label=f"Media: {mean_val:.2f}{config.get('unit', '')}")
-
-    ax.set_title(f"{config['title']} – Modello: {model_name}", fontsize=14)
-    ax.set_xlabel(config['xlabel'], fontsize=12)
-    ax.set_ylabel(config['ylabel'], fontsize=12)
-    ax.grid(True)
-    ax.legend()
-    plt.tight_layout()
-
-    # Salva il grafico se richiesto
-    if save_plots:
-        metric_type = config.get('save_name', 'metric')
-        filename = f"plots/{metric_type}_{model_name}_{tracking_mode}.png"
-        fig.savefig(filename)
-        print(f"Grafico salvato: {filename}")
-    return fig
-
-def generate_performance_plots(
-        fps_data: deque,
-        memory_data: deque,
-        track_confidences: Dict,
-        model_path: str,
-        class_names: Dict,
-        timestamps: deque,
-        tracking_mode: str,
-        save_plots: bool = False):
-
-    model_name = os.path.basename(model_path).replace('.pt', '')
-    figures = []
-
-    # Crea directory per i grafici se necessario
-    if save_plots:
-        os.makedirs('plots', exist_ok=True)
-
-    # Accuracy YOLO
-    if track_confidences:
-        track_ids = list(track_confidences.keys())
-        confidences = [conf for (_, conf) in track_confidences.values()]
-        class_labels = [cls for (cls, _) in track_confidences.values()]
-
-        fig, ax = plt.subplots(figsize=(12, 6))
-        ax.bar(track_ids, confidences, color='skyblue')
-
-        for tid, conf, cls in zip(track_ids, confidences, class_labels):
-            ax.text(tid, conf + 0.02, f"{cls}\n{conf:.2f}", ha='center', fontsize=9)
-
-        mean_conf = np.mean(confidences)
-        ax.axhline(mean_conf, color='red', linestyle='--', linewidth=2,
-                   label=f"Media: {mean_conf:.2f}")
-
-        ax.set_title(f"Accuracy YOLO su tracciamento – Modello: {model_name}", fontsize=14)
-        ax.set_xlabel("ID Tracciamento", fontsize=12)
-        ax.set_ylabel("Accuracy YOLO", fontsize=12)
-        ax.set_ylim(0, 1.05)
-        ax.grid(True)
-        ax.legend()
-        plt.tight_layout()
-
-        if save_plots:
-            filename = f"plots/accuracy_{model_name}_{tracking_mode}.png"
-            fig.savefig(filename)
-            print(f"Grafico salvato: {filename}")
-
-        figures.append(fig)
-    else:
-        print("Nessun oggetto trovato: Grafico accuracy non generato")
-
-    # Grafico FPS
-    if fps_data:
-        fps_values = list(fps_data)
-        time_indices = list(timestamps)
-
-        fig = plot_metric(fps_values, {
-            'x': time_indices,
-            'y': fps_values,
-            'color': 'blue',
-            'label': 'FPS per frame',
-            'mean': True,
-            'title': 'Andamento FPS',
-            'xlabel': 'Secondi',
-            'ylabel': 'FPS',
-            'save_name': 'fps'
-        }, model_name, tracking_mode, save_plots)
-        figures.append(fig)
-    else:
-        print("Nessun dato FPS: Grafico FPS non generato")
-
-    # Grafico utilizzo memoria RAM
-    if memory_data:
-        mem_values = list(memory_data)
-        time_indices = list(timestamps)
-
-        fig = plot_metric(mem_values, {
-            'x': time_indices,
-            'y': mem_values,
-            'marker': 's',
-            'color': 'purple',
-            'label': 'Memoria (MB)',
-            'mean': True,
-            'unit': ' MB',
-            'title': 'Andamento utilizzo RAM',
-            'xlabel': 'Tempo (secondi)',
-            'ylabel': 'Memoria utilizzata (MB)',
-            'save_name': 'memory'
-        }, model_name, tracking_mode, save_plots)
-        figures.append(fig)
-
-    plt.show(block=True)
-
-    for fig in figures:
-        plt.close(fig)
 
 def main():
     args = parse_arguments()
@@ -431,7 +310,7 @@ def main():
 
     print(f"Tracking selezionato: {config.tracking_mode.upper()}")
 
-    # Inizializzo componenti
+    # Inizializzazione componenti
     IMG_W, IMG_H = get_camera_resolution(config.camera)
     calibration = CalibrationData(config.camera)
     tracker = initialize_tracker(config)
@@ -440,7 +319,24 @@ def main():
 
     video_source = get_video_source(config.camera, config.rtsp_url)
 
-    # Carica mappa e GUI
+    # Crea SessionManager per salvare i dati
+    session_config = SessionConfig(
+        camera=config.camera,
+        tracking_mode=config.tracking_mode,
+        yolo_model_path=config.yolo_model_path,
+        deepsort_model_path=config.deepsort_model_path,
+        detection_threshold=config.detection_threshold,
+        duration=config.duration,
+        rtsp_url=config.rtsp_url,
+        gui=config.gui,
+        start_time=datetime.now().isoformat(),
+        video_source=video_source,
+        resolution=(IMG_W, IMG_H)
+    )
+
+    session = SessionManager(session_config)
+    print(f"\nSessione creata: {session.get_session_dir()}\n")
+
     map_img = None
     if config.gui:
         map_path = f'calibration/map_{config.camera}.jpeg'
@@ -451,13 +347,9 @@ def main():
         else:
             cv2.namedWindow("Video + Map", cv2.WINDOW_NORMAL)
 
-    # Performance tracking
-    track_confidences = defaultdict(float)
-    fps_data = deque(maxlen=SIZE_PERF_WINDOW)
-    memory_data = deque(maxlen=SIZE_PERF_WINDOW)
-    timestamps = deque(maxlen=SIZE_PERF_WINDOW)
+    # Inizializzazione contatori
+    frame_number = 0
 
-    # Main processing loop
     try:
         with VideoProcessor(video_source) as cap:
             print("Inizio processing su video...")
@@ -468,19 +360,20 @@ def main():
                 time_process = time.time() - start_process_time
 
                 if config.duration > 0 and time_process >= config.duration:
-                    print(f"Durata {config.duration} secondi raggiunta. Elaborazione grafici...")
+                    print(f"\nDurata {config.duration} secondi raggiunta.")
                     break
 
                 start_time = time.time()
                 ret, frame = cap.read()
 
                 if not ret or frame is None:
-                    print("Fine processing video")
+                    print("\n🎬 Fine processing video")
                     break
 
                 frame = cv2.resize(frame, (IMG_W, IMG_H))
+                frame_number += 1
 
-                # Process con YOLO
+                # Processing con YOLO
                 if config.tracking_mode in ["bytetrack", "botsort"]:
                     results = model.track(
                         source=frame,
@@ -492,7 +385,7 @@ def main():
                 else:
                     results = model.predict(source=frame, conf=0.5, verbose=False)[0]
 
-                # Process detections
+                # Estrazione detection
                 detections, yolo_conf_map = process_yolo_detections(
                     results,
                     config.detection_threshold,
@@ -524,8 +417,14 @@ def main():
                     if track_info is None:
                         continue
 
-                    # Coordinate della mappa
+                    # Proiezione su mappa
                     lat, lon, (px, py) = calibration.project_to_map(*track_info['base_point'])
+
+                    # Aggiunta coordinate geografiche al track_info
+                    track_info['latitude'] = lat
+                    track_info['longitude'] = lon
+                    track_info['map_px'] = px
+                    track_info['map_py'] = py
 
                     frame_detections.append((
                         track_info['track_id'],
@@ -534,12 +433,14 @@ def main():
                         lon
                     ))
 
-                    if track_info['track_id'] not in track_confidences:
-                        track_confidences[track_info['track_id']] = (
-                            track_info['class_name'],
-                            track_info['confidence']
-                        )
+                    # Salva track nel CSV
+                    session.add_track(
+                        frame_number=frame_number,
+                        timestamp=time_process,
+                        track_info=track_info
+                    )
 
+                    # Disegno su GUI
                     if config.gui:
                         label = f"ID {track_info['track_id']} - {track_info['class_name']}"
                         draw_detection(
@@ -550,20 +451,25 @@ def main():
                             label
                         )
 
-                # Output detections (per MQTT o log)
+                # Output detection (per MQTT o logging)
                 if frame_detections:
                     print(json.dumps(frame_detections, indent=2))
 
-                # Calcolo delle performance
+                # Calcolo metriche performance
                 end_time = time.time()
                 fps = 1.0 / (end_time - start_time + 1e-8)
                 memory = psutil.Process().memory_info().rss / (1024 * 1024)
-                fps_data.append(fps)
-                memory_data.append(memory)
-                current_time = time.time() - start_process_time
-                timestamps.append(current_time)
 
-                # Display GUI
+                # Salva metriche nel CSV
+                session.add_metrics(
+                    timestamp=time_process,
+                    fps=fps,
+                    memory_mb=memory,
+                    num_tracks=len(tracked_objects),
+                    frame_number=frame_number
+                )
+
+                # Visualizzazione GUI
                 if config.gui:
                     dual_display = create_dual_display(frame, map_img_copy)
                     cv2.imshow("Video + Map", dual_display)
@@ -571,22 +477,20 @@ def main():
                         break
 
     except KeyboardInterrupt:
-        print("Interruzione manuale con CTRL+C")
+        print("\n Interruzione manuale con CTRL+C")
 
     finally:
-        # Genera grafici
-        print("Generazione dei grafici delle performance...")
-        generate_performance_plots(
-            fps_data,
-            memory_data,
-            track_confidences,
-            config.yolo_model_path,
-            class_names,
-            timestamps,
-            tracking_mode=config.tracking_mode,
-            save_plots=args.save
-        )
-        plt.ioff()
+        session.finalize()
+
+        if not args.no_plots:
+            print("\n Generazione grafici dalle metriche salvate...")
+            generate_performance_plots_from_csv(
+                session_dir=session.get_session_dir(),
+                plots_dir=session.get_plots_dir(),
+                save_plots=True
+            )
+        else:
+            print("\n Generazione grafici saltata (usa -no-plots)")
 
 if __name__ == "__main__":
     main()
