@@ -18,18 +18,17 @@ import shutil
 import xml.etree.ElementTree as ET
 
 IMAGES_DIR = "train_data_raw/train_images"  # Directory containing training images.          
-XML_FILE   = "train_data_raw/annotations.xml" #
+XML_FILE   = "train_data_raw/annotations.xml"       
 OUTPUT_DIR = "train_data"
 TRAIN_RATIO = 0.8                   
 
 # Class mapping for your dataset (label_name -> class_index).
 CLASS_MAP = {
     "car": 0,
-    "bus": 1,
-    "bicycle": 2,
+    "bicycle": 1,
+    "bus": 2,
     "person": 3,
-    "motorbike": 4,
-    "electric scooter": 5
+    "motorbike": 4
 }
 
 

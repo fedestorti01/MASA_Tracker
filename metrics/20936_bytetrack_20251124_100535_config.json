@@ -1,0 +1,11 @@
+{
+  "camera_id": "20936",
+  "tracking_mode": "bytetrack",
+  "yolo_model": "trained_models/yolov8m-tuned.pt",
+  "detection_threshold": 0.8,
+  "video_source": "videos\\video_20936_20230920_133523.mp4",
+  "duration": 30,
+  "start_time": "2025-11-24T10:05:35.984115",
+  "image_width": 1920,
+  "image_height": 1080
+}

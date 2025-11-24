@@ -6,10 +6,9 @@ import argparse
 import numpy as np
 import cv2
 
-
 # >>> CHANGES START HERE <<<
 import tensorflow.compat.v1 as tf
-tf.compat.v1.disable_v2_behavior()
+tf.disable_v2_behavior()
 # >>> CHANGES END HERE <<<
 
 def _run_in_batches(f, data_dict, out, batch_size):
@@ -79,7 +78,7 @@ class ImageEncoder(object):
                  output_name="features"):
         # TF1.x session creation in TF2.x environment
         self.session = tf.Session()
-        with tf.io.gfile.GFile(checkpoint_filename, "rb") as file_handle:
+        with tf.gfile.GFile(checkpoint_filename, "rb") as file_handle:
             graph_def = tf.GraphDef()
             graph_def.ParseFromString(file_handle.read())
         tf.import_graph_def(graph_def, name="net")

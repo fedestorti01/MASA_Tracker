@@ -11,12 +11,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import psutil
 from ultralytics import YOLO
-from deep_sort.deep_sort import nn_matching
-from deep_sort.deep_sort.detection import Detection
-from deep_sort.deep_sort.tracker import Tracker as DeepSortTracker
-from deep_sort.tools import generate_detections as gdet
 from deepsort_utils import DeepSortWrapper
 from deepsort_utils_kalman import KalmanWrapper
+from bytetrack_utils import ByteTrackWrapper
+from botsort_utils import BotSORTWrapper
 
 DETECTION_THRESHOLD = 0.8
 DISPLAY_W = 1920
@@ -32,6 +30,7 @@ class Config:
     yolo_model_path: str
     deepsort_model_path: str
     detection_threshold: float = DETECTION_THRESHOLD
+    duration: int = 30  # Durata processing in secondi
 
 class CalibrationData:
     def __init__(self, camera: str):
@@ -49,7 +48,7 @@ class CalibrationData:
                 json_data = json.load(f)
 
             if not json_data.get("homography", {}).get("computed", False):
-                raise ValueError(" ")
+                raise ValueError("Homography non computata")
 
             self.homography_matrix = np.array(
                 json_data["homography"]["matrix"],
@@ -57,7 +56,7 @@ class CalibrationData:
             ).reshape(3, 3)
 
         except FileNotFoundError:
-            print(f" File di calibrazione non trovato: {json_path}")
+            print(f"File di calibrazione non trovato: {json_path}")
             raise SystemExit(1)
 
         ### Carica JGW
@@ -70,7 +69,7 @@ class CalibrationData:
                 self.jgw_data[letter] = float(line.strip())
 
         except FileNotFoundError:
-            print("JGW file non trovato: {jgw_path}")
+            print(f"JGW file non trovato: {jgw_path}")  # FIX: aggiunto f-string
             raise SystemExit(1)
 
     def project_to_map(self, x: int, y: int) -> Tuple[float, float]:
@@ -80,20 +79,16 @@ class CalibrationData:
         px, py = np.round(projected[0][0]).astype(int)
 
         ### Converte pixel in coordinate geografiche
-        lon = round(
-            self.jgw_data['A'] * px + self.jgw_data['B'] * py + self.jgw_data['C'], 6)
-        lat = round(
-            self.jgw_data['D'] * px + self.jgw_data['E'] * py + self.jgw_data['F'], 6)
-
+        lon = round(self.jgw_data['A'] * px + self.jgw_data['B'] * py + self.jgw_data['C'], 6)
+        lat = round(self.jgw_data['D'] * px + self.jgw_data['E'] * py + self.jgw_data['F'], 6)
         return lat, lon, (px, py)
 
 class VideoProcessor:
     ### Gestione automatica di apertura e chiusura video
-
     def __init__(self, source: str):
         self.cap = cv2.VideoCapture(source)
         if not self.cap.isOpened():
-            raise ValueError(f" Apertura video non riuscita: {source}")
+            raise ValueError(f"Apertura video non riuscita: {source}")
 
     def __enter__(self):
         return self.cap
@@ -121,6 +116,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("-botsort", action="store_true", help="Use BotSORT (YOLOv8 built-in)")
     parser.add_argument("-yolo_model_path", type=str, default="trained_models/yolov8m-tuned.pt", help="Path to YOLO model")
     parser.add_argument("-deepsort_model_path", type=str, default="trained_models/mars-small128.pb", help="Path to DeepSORT model")
+    parser.add_argument("-duration", type=int, default=30, help="Durata processing in secondi (0 = infinito)")
     parser.add_argument("-save", action="store_true", help="Salva i grafici dopo averli visualizzati")
     return parser.parse_args()
 
@@ -139,6 +135,7 @@ def tracking_mode(args: argparse.Namespace) -> str:
         raise SystemExit(1)
 
 def initialize_tracker(config: Config):
+
     if config.tracking_mode == "deepsort":
         print("Inizializzazione DeepSORT tracker...")
         return DeepSortWrapper(
@@ -153,9 +150,25 @@ def initialize_tracker(config: Config):
             max_age=30,
             n_init=3
         )
+    elif config.tracking_mode == "bytetrack":
+        print("Inizializzazione ByteTrack tracker...")
+        return ByteTrackWrapper(
+            track_thresh=0.5,
+            track_buffer=30,
+            match_thresh=0.8
+        )
+    elif config.tracking_mode == "botsort":
+        print("Inizializzazione BotSORT tracker...")
+        return BotSORTWrapper(
+            track_high_thresh=0.5,
+            track_low_thresh=0.1,
+            new_track_thresh=0.6,
+            track_buffer=30,
+            match_thresh=0.8,
+            with_reid=True
+        )
     else:
-        print(f"Inizializzazione {config.tracking_mode.upper()} tracker (YOLOv8 built-in)...")
-        return None
+        raise ValueError(f"Modalità tracking non supportata: {config.tracking_mode}")
 
 def get_video_source(camera: str, rtsp_url: str) -> str:
     if rtsp_url:
@@ -163,7 +176,7 @@ def get_video_source(camera: str, rtsp_url: str) -> str:
 
     video_files = [f for f in os.listdir("videos") if f.startswith(f"video_{camera}")]
     if not video_files:
-        raise FileNotFoundError(f"File video non trovato {camera}")
+        raise FileNotFoundError(f"File video non trovato per camera {camera}")
 
     return os.path.join("videos", video_files[0])
 
@@ -184,7 +197,6 @@ def process_yolo_detections(
         detection_threshold: float,
         class_names: Dict[int, str]
 ) -> Tuple[List, Dict]:
-
     detections = []
     yolo_conf_map = {}
 
@@ -201,8 +213,7 @@ def process_yolo_detections(
 
             if conf >= detection_threshold:
                 bbox = (int(x1), int(y1), int(x2), int(y2))
-                detections.append([int(x1), int(y1), int(x2), int(y2),
-                                   float(conf), int(class_id)])
+                detections.append([int(x1), int(y1), int(x2), int(y2), float(conf), int(class_id)])
                 yolo_conf_map[bbox] = float(conf)
 
     return detections, yolo_conf_map
@@ -213,43 +224,22 @@ def update_tracker(tracker, tracking_mode: str, frame, detections, results):
         return tracker.tracks
 
     elif tracking_mode in ["bytetrack", "botsort"]:
-        new_detections = []
-        for box in results.boxes:
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            conf = float(box.conf[0])
-            cls_id = int(box.cls[0])
-            track_id = int(box.id[0]) if box.id is not None else 0
+        tracker.update(frame, detections, yolo_results=results)
+        return tracker.get_tracks()
 
-            new_detections.append({
-                "bbox": (x1, y1, x2, y2),
-                "track_id": track_id,
-                "cls_id": cls_id,
-                "conf": conf
-            })
-        return new_detections
-
-    return detections
+    return []
 
 def extract_track_info(track, tracking_mode: str, class_names: Dict, yolo_conf_map: Dict):
-    ### Normalizza informazioni da diversi tracker in un formato comune
-    if tracking_mode in ["bytetrack", "botsort"]:
-        if isinstance(track, dict):
-            x1, y1, x2, y2 = track["bbox"]
-            conf = track["conf"]
-            cls_id = track["cls_id"]
-            track_id = track["track_id"]
-        else:
-            return None
-
-    elif tracking_mode in ["deepsort", "kalman"]:
-        x1, y1, x2, y2 = track.bbox
-        track_id = track.track_id
-        cls_id = track.det_class if hasattr(track, "det_class") else None
-        bbox_key = (int(x1), int(y1), int(x2), int(y2))
-        conf = yolo_conf_map.get(bbox_key, DETECTION_THRESHOLD)
-
-    else:
+    # Tutti i wrapper ora ritornano oggetti Track con attributi uniformi
+    if not hasattr(track, 'bbox') or not hasattr(track, 'track_id'):
         return None
+
+    x1, y1, x2, y2 = track.bbox
+    track_id = track.track_id
+    cls_id = track.det_class if hasattr(track, "det_class") else None
+    conf = track.confidence if hasattr(track, "confidence") else yolo_conf_map.get(
+        (int(x1), int(y1), int(x2), int(y2)), DETECTION_THRESHOLD
+    )
 
     base_x = int(x1 + (x2 - x1) / 2)
     base_y = int(y2)
@@ -303,8 +293,7 @@ def create_dual_display(
 
     return combined
 
-
-def plot_metric(data: List, config: Dict, model_name: str, tracking_mode:str, save_plots: bool = False):
+def plot_metric(data: List, config: Dict, model_name: str, tracking_mode: str, save_plots: bool = False):
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(config['x'], config['y'],
             marker=config.get('marker', 'o'),
@@ -324,18 +313,13 @@ def plot_metric(data: List, config: Dict, model_name: str, tracking_mode:str, sa
     ax.legend()
     plt.tight_layout()
 
-    # Mostra il grafico
-    plt.show(block=True)
-
     # Salva il grafico se richiesto
     if save_plots:
         metric_type = config.get('save_name', 'metric')
         filename = f"plots/{metric_type}_{model_name}_{tracking_mode}.png"
-
         fig.savefig(filename)
         print(f"Grafico salvato: {filename}")
-
-    plt.close(fig)
+    return fig
 
 def generate_performance_plots(
         fps_data: deque,
@@ -348,6 +332,7 @@ def generate_performance_plots(
         save_plots: bool = False):
 
     model_name = os.path.basename(model_path).replace('.pt', '')
+    figures = []
 
     # Crea directory per i grafici se necessario
     if save_plots:
@@ -376,26 +361,22 @@ def generate_performance_plots(
         ax.grid(True)
         ax.legend()
         plt.tight_layout()
-        plt.show(block=True)
 
-        # Salva il grafico se richiesto
         if save_plots:
             filename = f"plots/accuracy_{model_name}_{tracking_mode}.png"
             fig.savefig(filename)
             print(f"Grafico salvato: {filename}")
 
-        plt.close(fig)
-
+        figures.append(fig)
     else:
         print("Nessun oggetto trovato: Grafico accuracy non generato")
 
     # Grafico FPS
     if fps_data:
         fps_values = list(fps_data)
-        #time_indices = np.cumsum([1.0 / f if f > 0 else 0 for f in fps_values])
         time_indices = list(timestamps)
 
-        plot_metric(fps_values, {
+        fig = plot_metric(fps_values, {
             'x': time_indices,
             'y': fps_values,
             'color': 'blue',
@@ -406,18 +387,16 @@ def generate_performance_plots(
             'ylabel': 'FPS',
             'save_name': 'fps'
         }, model_name, tracking_mode, save_plots)
-
+        figures.append(fig)
     else:
         print("Nessun dato FPS: Grafico FPS non generato")
 
     # Grafico utilizzo memoria RAM
     if memory_data:
         mem_values = list(memory_data)
-        #time_indices = (np.cumsum([1.0 / f if f > 0 else 0 for f in fps_data])
-        #                if fps_data else list(range(1, len(mem_values) + 1)))
         time_indices = list(timestamps)
 
-        plot_metric(mem_values, {
+        fig = plot_metric(mem_values, {
             'x': time_indices,
             'y': mem_values,
             'marker': 's',
@@ -429,8 +408,13 @@ def generate_performance_plots(
             'xlabel': 'Tempo (secondi)',
             'ylabel': 'Memoria utilizzata (MB)',
             'save_name': 'memory'
-        },model_name, tracking_mode, save_plots)
+        }, model_name, tracking_mode, save_plots)
+        figures.append(fig)
 
+    plt.show(block=True)
+
+    for fig in figures:
+        plt.close(fig)
 
 def main():
     args = parse_arguments()
@@ -441,7 +425,8 @@ def main():
         gui=args.gui,
         tracking_mode=tracking_mode(args),
         yolo_model_path=args.yolo_model_path,
-        deepsort_model_path=args.deepsort_model_path
+        deepsort_model_path=args.deepsort_model_path,
+        duration=args.duration
     )
 
     print(f"Tracking selezionato: {config.tracking_mode.upper()}")
@@ -453,7 +438,6 @@ def main():
     model = YOLO(config.yolo_model_path)
     class_names = model.names
 
-    # Prepara video
     video_source = get_video_source(config.camera, config.rtsp_url)
 
     # Carica mappa e GUI
@@ -479,12 +463,12 @@ def main():
             print("Inizio processing su video...")
 
             start_process_time = time.time()
-            max = 30
 
             while True:
-                time_process = time.time() -start_process_time
-                if time_process >= max:
-                    print(f" Durata {max} secondi. Elaborazione grafici...")
+                time_process = time.time() - start_process_time
+
+                if config.duration > 0 and time_process >= config.duration:
+                    print(f"Durata {config.duration} secondi raggiunta. Elaborazione grafici...")
                     break
 
                 start_time = time.time()
@@ -496,6 +480,7 @@ def main():
 
                 frame = cv2.resize(frame, (IMG_W, IMG_H))
 
+                # Process con YOLO
                 if config.tracking_mode in ["bytetrack", "botsort"]:
                     results = model.track(
                         source=frame,
@@ -540,7 +525,7 @@ def main():
                         continue
 
                     # Coordinate della mappa
-                    lat, lon, (px, py) = calibration.project_to_map( *track_info['base_point'])
+                    lat, lon, (px, py) = calibration.project_to_map(*track_info['base_point'])
 
                     frame_detections.append((
                         track_info['track_id'],
@@ -550,7 +535,10 @@ def main():
                     ))
 
                     if track_info['track_id'] not in track_confidences:
-                        track_confidences[track_info['track_id']] = (track_info['class_name'], track_info['confidence'])
+                        track_confidences[track_info['track_id']] = (
+                            track_info['class_name'],
+                            track_info['confidence']
+                        )
 
                     if config.gui:
                         label = f"ID {track_info['track_id']} - {track_info['class_name']}"
@@ -563,7 +551,8 @@ def main():
                         )
 
                 # Output detections (per MQTT o log)
-                print(json.dumps(frame_detections, indent=2))
+                if frame_detections:
+                    print(json.dumps(frame_detections, indent=2))
 
                 # Calcolo delle performance
                 end_time = time.time()
@@ -586,7 +575,7 @@ def main():
 
     finally:
         # Genera grafici
-        print("Generazione dei grafici delle performance..")
+        print("Generazione dei grafici delle performance...")
         generate_performance_plots(
             fps_data,
             memory_data,
@@ -594,12 +583,10 @@ def main():
             config.yolo_model_path,
             class_names,
             timestamps,
-            save_plots = args.save,
-            tracking_mode=config.tracking_mode
+            tracking_mode=config.tracking_mode,
+            save_plots=args.save
         )
-
         plt.ioff()
-        plt.show()
 
 if __name__ == "__main__":
     main()
