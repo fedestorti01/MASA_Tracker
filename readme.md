@@ -43,7 +43,7 @@ python3 main.py -camera 20936 -bytetrack -gui -save
 
 ### Examples
 
-```bash
+```
 # ByteTrack with GUI and plots
 python3 main.py -camera 20936 -bytetrack -gui -save
 
