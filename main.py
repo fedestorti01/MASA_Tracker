@@ -142,10 +142,12 @@ def config_from_gui() -> Optional[Config]:
     if gui_config is None:
         return None
 
+    show_gui = gui_config.tracking_mode != "kalman"
+
     config = Config(
         camera="20936",
         rtsp_url="",
-        gui=True,
+        gui=show_gui,
         tracking_mode=gui_config.tracking_mode,
         yolo_model_path="trained_models/yolov8m-tuned.pt",
         deepsort_model_path="trained_models/mars-small128.pb",
