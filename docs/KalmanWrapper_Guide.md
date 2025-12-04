@@ -17,14 +17,15 @@ This makes it much faster than full DeepSORT while maintaining good tracking per
 ## Usage
 
 ### Basic Usage
+
 ```python
-from deepsort_utils_kalman import KalmanWrapper
+from utils.deepsort_utils_kalman import KalmanWrapper
 
 # Initialize Kalman-only tracker
 tracker = KalmanWrapper(
     max_iou_distance=0.7,  # IoU threshold for matching (0.0-1.0)
-    max_age=30,           # Frames to keep track without detection
-    n_init=3              # Detections needed to confirm track
+    max_age=30,  # Frames to keep track without detection
+    n_init=3  # Detections needed to confirm track
 )
 
 # Update with detections (same interface as DeepSortWrapper)
@@ -38,6 +39,7 @@ for track in tracker.tracks:
 ```
 
 ### Replace DeepSORT in main.py
+
 ```python
 # OLD: DeepSORT with neural networks
 # from deepsort_utils import DeepSortWrapper
@@ -48,7 +50,8 @@ for track in tracker.tracks:
 # )
 
 # NEW: Kalman-only tracking
-from deepsort_utils_kalman import KalmanWrapper
+from utils.deepsort_utils_kalman import KalmanWrapper
+
 deepsort = KalmanWrapper(
     max_iou_distance=0.7,
     max_age=30,

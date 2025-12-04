@@ -14,15 +14,10 @@ class SimpleConfigGUI:
         self.root.title("Configurazione Tracking")
         self.root.geometry("450x200")
         self.root.resizable(False, False)
-
         self._center_window()
-
         self.result: Optional[GUIConfig] = None
-
         self.create_widgets()
-
         self.root.protocol("WM_DELETE_WINDOW", self.on_cancel)
-
         self.root.lift()
         self.root.focus_force()
 

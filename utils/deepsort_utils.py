@@ -11,7 +11,6 @@ class Track:
         self.bbox = bbox
         self.det_class = det_class
 
-
 class DeepSortWrapper:
     def __init__(self, model_filename='model_data/mars-small128.pb', max_cosine_distance=0.4, nn_budget=None):
         metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)

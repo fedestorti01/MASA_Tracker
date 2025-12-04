@@ -1,10 +1,8 @@
 import argparse
 import json
-import logging
 import os
 import sys
 import time
-from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
@@ -12,13 +10,13 @@ import cv2
 import numpy as np
 import psutil
 from ultralytics import YOLO
-from deepsort_utils import DeepSortWrapper
-from deepsort_utils_kalman import KalmanWrapper
-from bytetrack_utils import ByteTrackWrapper
-from botsort_utils import BotSORTWrapper
+from utils.deepsort_utils import DeepSortWrapper
+from utils.deepsort_utils_kalman import KalmanWrapper
+from utils.bytetrack_utils import ByteTrackWrapper
+from utils.botsort_utils import BotSORTWrapper
 from plot_metrics import generate_performance_plots_from_csv
 from session_manager import SessionManager, SessionConfig
-from config_gui import SimpleConfigGUI, GUIConfig
+from config_gui import SimpleConfigGUI
 
 DETECTION_THRESHOLD = 0.8
 DISPLAY_W = 1920
@@ -136,7 +134,6 @@ def tracking_mode(args: argparse.Namespace) -> str:
         raise SystemExit(1)
 
 def config_from_gui() -> Optional[Config]:
-
     print("Apertura GUI di configurazione...")
 
     gui = SimpleConfigGUI()
@@ -434,6 +431,7 @@ def main():
 
                 frame_detections = []
 
+                # Processa tutti i track del frame
                 for track in tracked_objects:
                     track_info = extract_track_info(
                         track,
@@ -459,6 +457,7 @@ def main():
                         lon
                     ))
 
+                    # Aggiungi track alla sessione
                     session.add_track(
                         frame_number=frame_number,
                         timestamp=time_process,
@@ -474,6 +473,8 @@ def main():
                             (px, py),
                             label
                         )
+
+                session.finalize_frame(frame_number)
 
                 # Output detection (per MQTT o logging)
                 if frame_detections:
@@ -491,8 +492,22 @@ def main():
                     frame_number=frame_number
                 )
 
+                if frame_number % 100 == 0:
+                    current_metrics = session.get_tracking_metrics()
+                    print(f"\n[Frame {frame_number}] Metriche intermedie:")
+                    print(f"  Recall: {current_metrics['recall']:.4f}")
+                    print(f"  Precision: {current_metrics['precision']:.4f}")
+                    print(f"  IDF1: {current_metrics['idf1']:.4f}")
+                    print(f"  ID Switches: {current_metrics['id_switches']}\n")
+
                 if config.gui:
                     dual_display = create_dual_display(frame, map_img_copy)
+
+                    metrics = session.get_tracking_metrics()
+                    metrics_text = f"R:{metrics['recall']:.2f} P:{metrics['precision']:.2f} IDF1:{metrics['idf1']:.2f} IDS:{metrics['id_switches']}"
+                    cv2.putText(dual_display, metrics_text, (20, 80),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
                     cv2.imshow("Video + Map", dual_display)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
@@ -512,7 +527,6 @@ def main():
             )
         else:
             print("\nGenerazione grafici saltata (usa -no-plots)")
-
 
 if __name__ == "__main__":
     main()
