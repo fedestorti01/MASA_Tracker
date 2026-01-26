@@ -18,7 +18,9 @@ from plot_metrics import generate_performance_plots_from_csv
 from session_manager import SessionManager, SessionConfig
 from config_gui import SimpleConfigGUI
 
-DETECTION_THRESHOLD = 0.8
+DETECTION_THRESHOLD = 0.25
+YOLO_CONF_THRESHOLD = 0.25
+IOU_THRESHOLD = 0.4
 DISPLAY_W = 1920
 DISPLAY_H = 1080
 SIZE_PERF_WINDOW = 1800
@@ -32,6 +34,8 @@ class Config:
     yolo_model_path: str
     deepsort_model_path: str
     detection_threshold: float = DETECTION_THRESHOLD
+    yolo_conf_threshold: float = YOLO_CONF_THRESHOLD
+    iou_threshold: float = IOU_THRESHOLD
     duration: int = 30
 
 class CalibrationData:
@@ -113,8 +117,10 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("-kalman", action="store_true", help="Use Kalman-only tracking")
     parser.add_argument("-bytetrack", action="store_true", help="Use ByteTrack (YOLOv8 built-in)")
     parser.add_argument("-botsort", action="store_true", help="Use BotSORT (YOLOv8 built-in)")
-    parser.add_argument("-yolo_model_path", type=str, default="trained_models/yolov8m-tuned.pt", help="Path to YOLO model")
-    parser.add_argument("-deepsort_model_path", type=str, default="trained_models/mars-small128.pb", help="Path to DeepSORT model")
+    parser.add_argument("-yolo_model_path", type=str, default="trained_models/yolov8m-tuned.pt",
+                        help="Path to YOLO model")
+    parser.add_argument("-deepsort_model_path", type=str, default="trained_models/mars-small128.pb",
+                        help="Path to DeepSORT model")
     parser.add_argument("-duration", type=int, default=30, help="Durata processing in secondi (0 = infinito)")
     parser.add_argument("-save", action="store_true", help="Salva i grafici dopo averli visualizzati")
     parser.add_argument("-no-plots", action="store_true", help="Non generare grafici al termine (solo CSV)")
@@ -152,6 +158,8 @@ def config_from_gui() -> Optional[Config]:
         yolo_model_path="trained_models/yolov8m-tuned.pt",
         deepsort_model_path="trained_models/mars-small128.pb",
         detection_threshold=DETECTION_THRESHOLD,
+        yolo_conf_threshold=YOLO_CONF_THRESHOLD,
+        iou_threshold=IOU_THRESHOLD,
         duration=gui_config.duration
     )
 
@@ -317,6 +325,9 @@ def main():
             tracking_mode=tracking_mode(args),
             yolo_model_path=args.yolo_model_path,
             deepsort_model_path=args.deepsort_model_path,
+            detection_threshold=DETECTION_THRESHOLD,
+            yolo_conf_threshold=YOLO_CONF_THRESHOLD,
+            iou_threshold=IOU_THRESHOLD,
             duration=args.duration
         )
 
@@ -334,12 +345,19 @@ def main():
         save_plots_flag = False
         no_plots_flag = False
 
-    print(f"\n{'=' * 40}")
-    print(f"Tracking selezionato: {config.tracking_mode.upper()}")
-    print(f"Durata: {config.duration} secondi" + (" (infinito)" if config.duration == 0 else ""))
-    print(f"Camera: {config.camera}")
-    print(f"GUI durante tracking: {'Sì' if config.gui else 'No'}")
-    print(f"{'=' * 40}\n")
+    print(f"\n{'=' * 60}")
+    print(f"CONFIGURAZIONE OTTIMIZZATA PER EVALUATION")
+    print(f"{'=' * 60}")
+    print(f"Tracking selezionato:     {config.tracking_mode.upper()}")
+    print(f"Durata:                   {config.duration} secondi" + (" (infinito)" if config.duration == 0 else ""))
+    print(f"Camera:                   {config.camera}")
+    print(f"GUI durante tracking:     {'Sì' if config.gui else 'No'}")
+    print(f"{'─' * 60}")
+    print(f"PARAMETRI DETECTION:")
+    print(f"  YOLO conf threshold:    {config.yolo_conf_threshold}")
+    print(f"  Detection threshold:    {config.detection_threshold}")
+    print(f"  IOU threshold:          {config.iou_threshold}")
+    print(f"{'=' * 60}\n")
 
     # Inizializzazione componenti
     IMG_W, IMG_H = get_camera_resolution(config.camera)
@@ -357,6 +375,8 @@ def main():
         yolo_model_path=config.yolo_model_path,
         deepsort_model_path=config.deepsort_model_path,
         detection_threshold=config.detection_threshold,
+        yolo_conf_threshold=config.yolo_conf_threshold,
+        iou_threshold=config.iou_threshold,
         duration=config.duration,
         rtsp_url=config.rtsp_url,
         gui=config.gui,
@@ -365,8 +385,47 @@ def main():
         resolution=(IMG_W, IMG_H)
     )
 
-    session = SessionManager(session_config)
+    gt_file_path = os.path.join("train_data_raw", "annotations.xml")
+
+    # Verifica esistenza GT PRIMA di creare la sessione
+    if not os.path.exists(gt_file_path):
+        print(f"\n{'!' * 70}")
+        print(f"ERRORE CRITICO: Ground Truth non trovato!")
+        print(f"   Path atteso: {gt_file_path}")
+        print(f"   File esiste: {os.path.exists(gt_file_path)}")
+        print(f"{'!' * 70}\n")
+        sys.exit(1)
+
+    session = SessionManager(session_config, gt_xml_path=gt_file_path)
     print(f"\nSessione creata: {session.get_session_dir()}\n")
+
+    if session.gt_annotations:
+        gt_frames = len(session.gt_annotations)
+        gt_objects_total = sum(len(objs) for objs in session.gt_annotations.values())
+
+        print(f"\n{'=' * 70}")
+        print("DIAGNOSTICA GROUND TRUTH")
+        print(f"{'=' * 70}")
+        print(f"✓ Frame con annotazioni:    {gt_frames}")
+        print(f"✓ Totale oggetti annotati:  {gt_objects_total}")
+        print(f"✓ Media oggetti/frame:      {gt_objects_total / gt_frames:.2f}")
+        print(f"Frame range:              {min(session.gt_annotations.keys())} → {max(session.gt_annotations.keys())}")
+
+        # Mostra sample primi 3 frame
+        sample_frames = sorted(session.gt_annotations.keys())[:3]
+        print(f"\n📋 Sample primi 3 frame:")
+        for f in sample_frames:
+            objs = session.gt_annotations[f]
+            print(f"  Frame {f}: {len(objs)} oggetti - IDs: {[o['track_id'] for o in objs]}")
+        print(f"{'=' * 70}\n")
+    else:
+        print(f"\n{'!' * 70}")
+        print("ERRORE CRITICO: Ground Truth NON caricato correttamente!")
+        print(f"   File GT: {gt_file_path}")
+        print(f"   Esiste? {os.path.exists(gt_file_path)}")
+        print("IMPOSSIBILE CALCOLARE METRICHE AFFIDABILI")
+        print(f"{'!' * 70}\n")
+        sys.exit(1)
 
     map_img = None
     if config.gui:
@@ -406,17 +465,21 @@ def main():
                 if config.tracking_mode in ["bytetrack", "botsort"]:
                     results = model.track(
                         source=frame,
-                        conf=0.6,
+                        conf=config.yolo_conf_threshold,  # Ora usa 0.25
                         persist=True,
                         tracker=f"{config.tracking_mode}.yaml",
                         verbose=False
                     )[0]
                 else:
-                    results = model.predict(source=frame, conf=0.5, verbose=False)[0]
+                    results = model.predict(
+                        source=frame,
+                        conf=config.yolo_conf_threshold,  # Ora usa 0.25
+                        verbose=False
+                    )[0]
 
                 detections, yolo_conf_map = process_yolo_detections(
                     results,
-                    config.detection_threshold,
+                    config.detection_threshold,  # Ora usa 0.25
                     class_names
                 )
 
@@ -476,6 +539,7 @@ def main():
                             label
                         )
 
+                # Finalizza frame con IOU threshold ottimizzato
                 session.finalize_frame(frame_number)
 
                 # Output detection (per MQTT o logging)
@@ -494,12 +558,13 @@ def main():
                     frame_number=frame_number
                 )
 
+                # Metriche intermedie ogni 100 frame
                 if frame_number % 100 == 0:
                     current_metrics = session.get_tracking_metrics()
                     print(f"\n[Frame {frame_number}] Metriche intermedie:")
-                    print(f"  Recall: {current_metrics['recall']:.4f}")
-                    print(f"  Precision: {current_metrics['precision']:.4f}")
-                    print(f"  IDF1: {current_metrics['idf1']:.4f}")
+                    print(f"  Recall:      {current_metrics['recall']:.4f}")
+                    print(f"  Precision:   {current_metrics['precision']:.4f}")
+                    print(f"  IDF1:        {current_metrics['idf1']:.4f}")
                     print(f"  ID Switches: {current_metrics['id_switches']}\n")
 
                 if config.gui:
@@ -528,7 +593,7 @@ def main():
                 save_plots=True
             )
         else:
-            print("\nGenerazione grafici saltata (usa -no-plots)")
+            print("\nGenerazione grafici saltata (flag -no-plots attivo)")
 
 if __name__ == "__main__":
     main()
