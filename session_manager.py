@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, List, Set, Tuple
 from dataclasses import dataclass, asdict
 from collections import defaultdict
-
+import xml.etree.ElementTree as ET
 
 @dataclass
 class SessionConfig:
@@ -14,13 +14,14 @@ class SessionConfig:
     yolo_model_path: str
     deepsort_model_path: str
     detection_threshold: float
+    yolo_conf_threshold: float
+    iou_threshold: float
     duration: int
     rtsp_url: str
     gui: bool
     start_time: str
     video_source: str
     resolution: tuple  # (width, height)
-
 
 class TrackingMetrics:
     def __init__(self):
@@ -65,11 +66,14 @@ class TrackingMetrics:
 
     def update_frame(self, frame_number: int,
                      predictions: List[Dict],
-                     ground_truth: List[Dict] = None,
-                     iou_threshold: float = 0.5):
+                     ground_truth: List[Dict],
+                     iou_threshold: float = 0.4):
 
-        if ground_truth is None:
-            ground_truth = predictions
+        if not ground_truth:
+            raise ValueError(
+                f"Ground truth mancante per frame {frame_number}. "
+                f"Non chiamare update_frame se il frame non ha annotazioni GT."
+            )
 
         pred_ids = {p['track_id']: p for p in predictions}
         gt_ids = {g['track_id']: g for g in ground_truth}
@@ -77,6 +81,7 @@ class TrackingMetrics:
         matches = {}
         matched_gt = set()
 
+        # Matching prediction -> ground truth con IoU
         for pred_id, pred in pred_ids.items():
             best_iou = 0
             best_gt_id = None
@@ -95,6 +100,7 @@ class TrackingMetrics:
                 matches[pred_id] = best_gt_id
                 matched_gt.add(best_gt_id)
 
+        # Calcolo TP, FP, FN
         tp = len(matches)
         fp = len(pred_ids) - tp
         fn = len(gt_ids) - tp
@@ -105,6 +111,7 @@ class TrackingMetrics:
         self.total_gt += len(gt_ids)
         self.total_pred += len(pred_ids)
 
+        # Calcolo ID switches
         for pred_id, gt_id in matches.items():
             prev_gt_ids = self.id_mappings.get(pred_id, set())
 
@@ -113,16 +120,17 @@ class TrackingMetrics:
 
             self.id_mappings[pred_id].add(gt_id)
 
+        # Metriche per IDF1
         self.idtp += tp
         self.idfp += fp
         self.idfn += fn
 
+        # Tracking della continuità
         self.predicted_tracks[frame_number] = set(pred_ids.keys())
         self.ground_truth_tracks[frame_number] = set(gt_ids.keys())
         self.track_matches[frame_number] = matches
 
     def get_metrics(self) -> Dict[str, float]:
-
         recall = self.total_tp / (self.total_tp + self.total_fn) if (self.total_tp + self.total_fn) > 0 else 0.0
 
         precision = self.total_tp / (self.total_tp + self.total_fp) if (self.total_tp + self.total_fp) > 0 else 0.0
@@ -144,9 +152,16 @@ class TrackingMetrics:
 
 
 class SessionManager:
-    def __init__(self, config: SessionConfig, base_dir: str = "results"):
+    def __init__(self, config: SessionConfig, base_dir: str = "results", gt_xml_path: str = None):
         self.config = config
         self.base_dir = base_dir
+        self.gt_annotations = self._load_ground_truth(gt_xml_path) if gt_xml_path else None
+
+        if gt_xml_path and not self.gt_annotations:
+            raise RuntimeError(
+                f"ERRORE: Impossibile caricare Ground Truth da {gt_xml_path}. "
+                f"Le metriche di tracking non possono essere calcolate."
+            )
 
         # Genera nome sessione con timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -172,10 +187,82 @@ class SessionManager:
 
         self.current_frame_tracks = []
 
+        # Contatori per diagnostica
+        self.frames_with_gt = 0
+        self.frames_without_gt = 0
+
         self._initialize_files()
 
+    def _load_ground_truth(self, xml_path: str):
+        if not xml_path or not os.path.exists(xml_path):
+            print(f"\n{'!' * 70}")
+            print(f"ATTENZIONE: Ground Truth non trovato!")
+            print(f"   Path: {xml_path}")
+            print(f"   Esiste: {os.path.exists(xml_path) if xml_path else 'N/A'}")
+            print(f"Le metriche di tracking NON saranno affidabili!")
+            print(f"{'!' * 70}\n")
+            return None
+
+        print(f"\n{'─' * 70}")
+        print(f"Caricamento Ground Truth da: {xml_path}")
+
+        try:
+            gt_by_frame = {}
+            total_annotations = 0
+            unique_track_ids = set()
+
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
+
+            # Parsing XML
+            for track in root.findall('track'):
+                gt_id = int(track.get('id'))
+                unique_track_ids.add(gt_id)
+
+                for box in track.findall('box'):
+                    frame = int(box.get('frame'))
+                    bbox = (
+                        int(float(box.get('xtl'))),
+                        int(float(box.get('ytl'))),
+                        int(float(box.get('xbr'))),
+                        int(float(box.get('ybr')))
+                    )
+
+                    if frame not in gt_by_frame:
+                        gt_by_frame[frame] = []
+
+                    gt_by_frame[frame].append({
+                        'track_id': gt_id,
+                        'bbox': bbox
+                    })
+                    total_annotations += 1
+
+            # Report caricamento
+            if gt_by_frame:
+                frame_ids = sorted(gt_by_frame.keys())
+                print(f"Ground Truth caricato con successo!")
+                print(f"  • Frame annotati:        {len(gt_by_frame)}")
+                print(f"  • Totale annotazioni:    {total_annotations}")
+                print(f"  • Track ID unici:        {len(unique_track_ids)}")
+                print(f"  • Media obj/frame:       {total_annotations / len(gt_by_frame):.2f}")
+                print(f"  • Frame range:           {min(frame_ids)} → {max(frame_ids)}")
+                print(f"{'─' * 70}\n")
+            else:
+                print(f"XML caricato ma nessuna annotazione trovata!")
+                print(f"{'─' * 70}\n")
+                return None
+
+            return gt_by_frame
+
+        except Exception as e:
+            print(f"\n{'!' * 70}")
+            print(f"ERRORE nel parsing del Ground Truth XML:")
+            print(f"   {str(e)}")
+            print(f"{'!' * 70}\n")
+            return None
+
     def _initialize_files(self):
-        # Salva configurazione in JSON
+        # Salva configurazione in JSON (ora include nuovi parametri)
         with open(self.config_path, 'w') as f:
             json.dump(asdict(self.config), f, indent=2)
         print(f"✓ Config salvata: {self.config_path}")
@@ -263,14 +350,39 @@ class SessionManager:
             self._flush_tracks()
 
     def finalize_frame(self, frame_number: int):
+        # Se non abbiamo GT caricato, non possiamo calcolare metriche
+        if not self.gt_annotations:
+            print(f"⚠️  Frame {frame_number}: Nessun GT disponibile - skip metriche")
+            self.current_frame_tracks = []
+            return
+
+        # Cerca GT per questo frame specifico
+        real_gt = self.gt_annotations.get(frame_number)
+
+        if real_gt is None:
+            self.frames_without_gt += 1
+
+            # Log solo ogni 50 frame per non spammare
+            if self.frames_without_gt % 50 == 1:
+                print(f"Frame {frame_number}: Non presente nel GT (totale skippati: {self.frames_without_gt})")
+
+            self.current_frame_tracks = []
+            return
+
+        # Frame ha GT - procediamo con il calcolo
+        self.frames_with_gt += 1
 
         if self.current_frame_tracks:
-            self.tracking_metrics.update_frame(
-                frame_number=frame_number,
-                predictions=self.current_frame_tracks,
-                ground_truth=None,  # Usa predictions come GT in assenza di annotazioni
-                iou_threshold=0.5
-            )
+            try:
+                # Usa IOU threshold configurabile (default 0.4)
+                self.tracking_metrics.update_frame(
+                    frame_number=frame_number,
+                    predictions=self.current_frame_tracks,
+                    ground_truth=real_gt,
+                    iou_threshold=self.config.iou_threshold
+                )
+            except ValueError as e:
+                print(f"Errore nel calcolo metriche frame {frame_number}: {e}")
 
         self.current_frame_tracks = []
 
@@ -295,9 +407,7 @@ class SessionManager:
         self.tracks_buffer.clear()
 
     def _save_tracking_metrics(self):
-
         tracking_metrics = self.tracking_metrics.get_metrics()
-
         performance_stats = self._calculate_performance_stats()
 
         all_metrics = {
@@ -318,10 +428,14 @@ class SessionManager:
                 "tracking_mode": self.config.tracking_mode,
                 "yolo_model": self.config.yolo_model_path,
                 "detection_threshold": self.config.detection_threshold,
+                "yolo_conf_threshold": self.config.yolo_conf_threshold,
+                "iou_threshold": self.config.iou_threshold,
                 "duration_seconds": self.config.duration,
                 "start_time": self.config.start_time,
                 "video_source": self.config.video_source,
-                "resolution": self.config.resolution
+                "resolution": self.config.resolution,
+                "frames_with_gt": self.frames_with_gt,
+                "frames_without_gt": self.frames_without_gt
             }
         }
 
@@ -329,22 +443,30 @@ class SessionManager:
         with open(self.tracking_metrics_path, 'w') as f:
             json.dump(all_metrics, f, indent=2)
 
-        print(f"\n{'=' * 60}")
+        print(f"\n{'=' * 70}")
         print("METRICHE DI TRACKING")
-        print(f"{'=' * 60}")
+        print(f"{'=' * 70}")
         print(f"Recall:              {tracking_metrics['recall']:.4f}")
         print(f"Precision:           {tracking_metrics['precision']:.4f}")
         print(f"IDF1:                {tracking_metrics['idf1']:.4f}")
         print(f"ID Switches:         {tracking_metrics['id_switches']}")
-        print(f"{'-' * 60}")
+        print(f"{'-' * 70}")
         print(f"True Positives:      {tracking_metrics['total_true_positives']}")
         print(f"False Positives:     {tracking_metrics['total_false_positives']}")
         print(f"False Negatives:     {tracking_metrics['total_false_negatives']}")
         print(f"Total Ground Truth:  {tracking_metrics['total_ground_truth']}")
         print(f"Total Predictions:   {tracking_metrics['total_predictions']}")
-        print(f"{'=' * 60}")
+
+        print(f"\n{'=' * 70}")
+        print("CONFIGURAZIONE")
+        print(f"{'=' * 70}")
+        print(f"Detection Threshold: {self.config.detection_threshold}")
+        print(f"YOLO Conf Threshold: {self.config.yolo_conf_threshold}")
+        print(f"IOU Threshold:       {self.config.iou_threshold}")
+
+        print(f"\n{'=' * 70}")
         print("METRICHE DI PERFORMANCE")
-        print(f"{'=' * 60}")
+        print(f"{'=' * 70}")
         print(f"FPS medio:           {performance_stats['avg_fps']:.2f}")
         print(f"FPS min:             {performance_stats['min_fps']:.2f}")
         print(f"FPS max:             {performance_stats['max_fps']:.2f}")
@@ -353,8 +475,24 @@ class SessionManager:
         print(f"Track medi/frame:    {performance_stats['avg_tracks']:.2f}")
         print(f"Track max/frame:     {performance_stats['max_tracks']}")
         print(f"Totale frame:        {performance_stats['total_frames']}")
-        print(f"{'=' * 60}\n")
-        print(f"✓ Tutte le metriche salvate in: {self.tracking_metrics_path}")
+
+        print(f"\n{'=' * 70}")
+        print("COPERTURA GROUND TRUTH")
+        print(f"{'=' * 70}")
+        print(f"Frame con GT:        {self.frames_with_gt}")
+        print(f"Frame senza GT:      {self.frames_without_gt}")
+
+        total_frames = self.frames_with_gt + self.frames_without_gt
+        if total_frames > 0:
+            coverage = (self.frames_with_gt / total_frames) * 100
+            print(f"Copertura GT:        {coverage:.1f}%")
+
+            if coverage < 50:
+                print(f"\nATTENZIONE: Copertura GT bassa (<50%)!")
+                print(f"Le metriche potrebbero non essere rappresentative.")
+
+        print(f"{'=' * 70}\n")
+        print(f"Tutte le metriche salvate in: {self.tracking_metrics_path}")
 
     def _calculate_performance_stats(self) -> Dict[str, float]:
         stats = {
