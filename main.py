@@ -14,6 +14,7 @@ from utils.deepsort_utils import DeepSortWrapper
 from utils.deepsort_utils_kalman import KalmanWrapper
 from utils.bytetrack_utils import ByteTrackWrapper
 from utils.botsort_utils import BotSORTWrapper
+from utils.mqtt_manager import MASACommunication
 from plot_metrics import generate_performance_plots_from_csv
 from session_manager import SessionManager, SessionConfig
 from config_gui import SimpleConfigGUI
@@ -437,6 +438,9 @@ def main():
         else:
             cv2.namedWindow("Video + Map", cv2.WINDOW_NORMAL)
 
+    comm = MASACommunication()
+    comm.connect()
+
     frame_number = 0
 
     try:
@@ -515,6 +519,16 @@ def main():
                     track_info['map_px'] = px
                     track_info['map_py'] = py
 
+                    mqtt_payload = {
+                        "id": track_info['track_id'],
+                        "cls": track_info['class_name'],
+                        "lat": lat,
+                        "lon": lon,
+                        "frame": frame_number,
+                        "t_send": time.time()
+                    }
+                    comm.send_tracking(config.camera, config.tracking_mode, mqtt_payload)
+
                     frame_detections.append((
                         track_info['track_id'],
                         track_info['class_name'],
@@ -583,6 +597,7 @@ def main():
         print("\nInterruzione manuale con CTRL+C")
 
     finally:
+        comm.disconnect()
         session.finalize()
 
         if not no_plots_flag:
@@ -594,6 +609,16 @@ def main():
             )
         else:
             print("\nGenerazione grafici saltata (flag -no-plots attivo)")
+
+            # Invia il report finale con le metriche calcolate (IDF1, Recall, ecc.)
+            if 'session' in locals():
+                final_metrics = session.get_tracking_metrics()
+                comm.send_system_event(config.camera, "summary", final_metrics, qos=2)
+
+            # Spegnimento pulito
+            comm.disconnect()
+            if 'session' in locals():
+                session.finalize()
 
 if __name__ == "__main__":
     main()
