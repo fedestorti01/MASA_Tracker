@@ -43,7 +43,7 @@ class SimpleConfigGUI:
         self.algorithm_combo = ttk.Combobox(
             main_frame,
             textvariable=self.algorithm_var,
-            values=["deepsort", "kalman", "bytetrack", "botsort"],
+            values=["ByteTrack", "BotSORT", "Kalman-only", "deepsort"],
             state='readonly',
             width=30
         )
@@ -130,6 +130,6 @@ if __name__ == "__main__":
 
     if config:
         print(f"Configurazione ricevuta:")
-        print(f"  Tracking Mode: {config.tracking_mode}, Duration: {config.duration}")
+        print(f"Tracking Mode: {config.tracking_mode}, Duration: {config.duration}")
     else:
         print("Configurazione annullata")

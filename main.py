@@ -392,8 +392,8 @@ def main():
     if not os.path.exists(gt_file_path):
         print(f"\n{'!' * 70}")
         print(f"ERRORE CRITICO: Ground Truth non trovato!")
-        print(f"   Path atteso: {gt_file_path}")
-        print(f"   File esiste: {os.path.exists(gt_file_path)}")
+        print(f"Path atteso: {gt_file_path}")
+        print(f"File esiste: {os.path.exists(gt_file_path)}")
         print(f"{'!' * 70}\n")
         sys.exit(1)
 
@@ -407,23 +407,23 @@ def main():
         print(f"\n{'=' * 70}")
         print("DIAGNOSTICA GROUND TRUTH")
         print(f"{'=' * 70}")
-        print(f"✓ Frame con annotazioni:    {gt_frames}")
-        print(f"✓ Totale oggetti annotati:  {gt_objects_total}")
-        print(f"✓ Media oggetti/frame:      {gt_objects_total / gt_frames:.2f}")
+        print(f"Frame con annotazioni:    {gt_frames}")
+        print(f"Totale oggetti annotati:  {gt_objects_total}")
+        print(f"Media oggetti/frame:      {gt_objects_total / gt_frames:.2f}")
         print(f"Frame range:              {min(session.gt_annotations.keys())} → {max(session.gt_annotations.keys())}")
 
         # Mostra sample primi 3 frame
         sample_frames = sorted(session.gt_annotations.keys())[:3]
-        print(f"\n📋 Sample primi 3 frame:")
+        print(f"\nSample primi 3 frame:")
         for f in sample_frames:
             objs = session.gt_annotations[f]
-            print(f"  Frame {f}: {len(objs)} oggetti - IDs: {[o['track_id'] for o in objs]}")
+            print(f"Frame {f}: {len(objs)} oggetti - IDs: {[o['track_id'] for o in objs]}")
         print(f"{'=' * 70}\n")
     else:
         print(f"\n{'!' * 70}")
         print("ERRORE CRITICO: Ground Truth NON caricato correttamente!")
-        print(f"   File GT: {gt_file_path}")
-        print(f"   Esiste? {os.path.exists(gt_file_path)}")
+        print(f"File GT: {gt_file_path}")
+        print(f"Esiste? {os.path.exists(gt_file_path)}")
         print("IMPOSSIBILE CALCOLARE METRICHE AFFIDABILI")
         print(f"{'!' * 70}\n")
         sys.exit(1)
