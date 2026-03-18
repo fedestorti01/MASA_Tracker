@@ -11,7 +11,7 @@ The project follows an **Edge-Computing** architecture where video processing oc
    - `main.py`: Core logic for detection, tracking, and georeferencing.
    - `session_manager.py`: Handles CSV logging and local data persistence.
    - `mqtt_manager.py`: Manages the connection and publishing to the MASA ecosystem.
-   
+
 ## Smart Object Modeling (Metadata)
 To ensure scalability and privacy, the system models detected vehicles as IoT Smart Objects. Each MQTT message contains:
 - `track_id`: Unique identifier for the vehicle.

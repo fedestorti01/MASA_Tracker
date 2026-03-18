@@ -43,7 +43,7 @@ class SimpleConfigGUI:
         self.algorithm_combo = ttk.Combobox(
             main_frame,
             textvariable=self.algorithm_var,
-            values=["ByteTrack", "BotSORT", "Kalman-only", "deepsort"],
+            values=["bytetrack", "botsort", "Kalman-only", "deepsort"],
             state='readonly',
             width=30
         )
