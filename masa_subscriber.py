@@ -20,7 +20,7 @@ def on_message(client, userdata, msg):
         else:
             if "t_send" in data:
                 latency = (t_arrival - data['t_send']) * 1000
-                print(f"DATO RICEVUTO | ID:{data['id']} | Classe:{data['cls']} | Coord: {data['lat']} | {data['lon']} | Latenza: {latency:.2f} ms | Payload: {len(msg.payload)} bytes")
+                print(f"DATO RICEVUTO | ID:{data['id']} | Classe:{data['cls']} | Coord: {data['lat']} | {data['lon']} | ROI: {data['ROI']} | Latenza: {latency:.2f} ms | Payload: {len(msg.payload)} bytes")
 
     except Exception as e:
         print(f"Errore nella decodifica sul topic {msg.topic}: {e}")

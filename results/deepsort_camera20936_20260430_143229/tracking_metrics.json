@@ -1,0 +1,40 @@
+{
+  "tracking_metrics": {
+    "recall": 0.4935,
+    "precision": 0.3897,
+    "idf1": 0.4355,
+    "id_switches": 0,
+    "total_true_positives": 76,
+    "total_false_positives": 119,
+    "total_false_negatives": 78,
+    "total_ground_truth": 154,
+    "total_predictions": 195
+  },
+  "performance_metrics": {
+    "avg_fps": 1.9100000000000001,
+    "min_fps": 0.45,
+    "max_fps": 2.25,
+    "avg_memory_mb": 1300.7354054054051,
+    "max_memory_mb": 1304.23,
+    "avg_tracks": 5.27027027027027,
+    "max_tracks": 8,
+    "total_frames": 37
+  },
+  "session_info": {
+    "camera": "20936",
+    "tracking_mode": "deepsort",
+    "yolo_model": "trained_models/yolov8m-tuned.pt",
+    "detection_threshold": 0.25,
+    "yolo_conf_threshold": 0.25,
+    "iou_threshold": 0.4,
+    "duration_seconds": 30,
+    "start_time": "2026-04-30T14:32:17.175910",
+    "video_source": "videos\\video_20936_20230920_133523.mp4",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "frames_with_gt": 37,
+    "frames_without_gt": 0
+  }
+}

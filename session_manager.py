@@ -301,7 +301,7 @@ class SessionManager:
                 'map_px',
                 'map_py'
             ])
-        print(f"✓ Tracks CSV creato: {self.tracks_path}")
+        print(f"Tracks CSV creato: {self.tracks_path}")
 
         # Crea directory per i grafici
         os.makedirs(self.plots_dir, exist_ok=True)
@@ -352,7 +352,7 @@ class SessionManager:
     def finalize_frame(self, frame_number: int):
         # Se non abbiamo GT caricato, non possiamo calcolare metriche
         if not self.gt_annotations:
-            print(f"⚠️  Frame {frame_number}: Nessun GT disponibile - skip metriche")
+            print(f"Frame {frame_number}: Nessun GT disponibile - skip metriche")
             self.current_frame_tracks = []
             return
 

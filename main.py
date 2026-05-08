@@ -18,6 +18,9 @@ from utils.mqtt_manager import MASACommunication
 from plot_metrics import generate_performance_plots_from_csv
 from session_manager import SessionManager, SessionConfig
 from config_gui import SimpleConfigGUI
+import config_roi
+from Traffic_analyzer import TrafficAnalyzer
+
 
 DETECTION_THRESHOLD = 0.25
 YOLO_CONF_THRESHOLD = 0.25
@@ -38,6 +41,7 @@ class Config:
     yolo_conf_threshold: float = YOLO_CONF_THRESHOLD
     iou_threshold: float = IOU_THRESHOLD
     duration: int = 30
+    roi_enabled: bool = False
 
 class CalibrationData:
     def __init__(self, camera: str):
@@ -125,6 +129,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("-duration", type=int, default=30, help="Durata processing in secondi (0 = infinito)")
     parser.add_argument("-save", action="store_true", help="Salva i grafici dopo averli visualizzati")
     parser.add_argument("-no-plots", action="store_true", help="Non generare grafici al termine (solo CSV)")
+    parser.add_argument("-roi", action="store_true", help="Attiva modalità ROI e pannello PMV")
     return parser.parse_args()
 
 def tracking_mode(args: argparse.Namespace) -> str:
@@ -161,7 +166,8 @@ def config_from_gui() -> Optional[Config]:
         detection_threshold=DETECTION_THRESHOLD,
         yolo_conf_threshold=YOLO_CONF_THRESHOLD,
         iou_threshold=IOU_THRESHOLD,
-        duration=gui_config.duration
+        duration=gui_config.duration,
+        roi_enabled = gui_config.roi_enabled,
     )
 
     return config
@@ -441,6 +447,11 @@ def main():
     comm = MASACommunication()
     comm.connect()
 
+    # Inizializza l'analizzatore del traffico
+    analyzer = TrafficAnalyzer() if config.roi_enabled else None
+    if config.roi_enabled:
+        cv2.namedWindow("Pannello Messaggio Variabile", cv2.WINDOW_AUTOSIZE)
+
     frame_number = 0
 
     try:
@@ -495,9 +506,16 @@ def main():
                     results
                 )
 
+                if config.roi_enabled and analyzer is not None:
+                    messaggio_pmv, colore_pmv, img_pmv, ids_in_roi = analyzer.get_status(tracked_objects)
+                    cv2.imshow("Pannello Messaggio Variabile", img_pmv)
+                else:
+                    ids_in_roi = set()  # set vuoto se ROI disattivata
+
                 if config.gui:
                     map_img_copy = map_img.copy()
-
+                    if config.roi_enabled and analyzer is not None:  # poligono solo se ROI attiva
+                        cv2.polylines(frame, [analyzer.roi_points], isClosed=True, color=(0, 0, 255), thickness=2)
                 frame_detections = []
 
                 # Processa tutti i track del frame
@@ -524,6 +542,7 @@ def main():
                         "cls": track_info['class_name'],
                         "lat": lat,
                         "lon": lon,
+                        "ROI": track_info['track_id'] in ids_in_roi,
                         "frame": frame_number,
                         "t_send": time.time()
                     }

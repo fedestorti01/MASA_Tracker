@@ -7,12 +7,13 @@ from typing import Optional
 class GUIConfig:
     tracking_mode: str
     duration: int
+    roi_enabled: bool  # NUOVO
 
 class SimpleConfigGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Configurazione Tracking")
-        self.root.geometry("450x200")
+        self.root.geometry("450x250")  # altezza aumentata
         self.root.resizable(False, False)
         self._center_window()
         self.result: Optional[GUIConfig] = None
@@ -61,10 +62,19 @@ class SimpleConfigGUI:
             textvariable=self.duration_var,
             width=32
         )
-        self.duration_entry.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 20))
+        self.duration_entry.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
+
+        # NUOVO: Checkbox ROI
+        self.roi_var = tk.BooleanVar(value=False)
+        self.roi_checkbox = ttk.Checkbutton(
+            main_frame,
+            text="Attiva modalità ROI / Pannello a messaggio variabile",
+            variable=self.roi_var
+        )
+        self.roi_checkbox.grid(row=4, column=0, sticky=tk.W, pady=(0, 20))
 
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=4, column=0, sticky=(tk.E))
+        button_frame.grid(row=5, column=0, sticky=(tk.E))
 
         self.cancel_button = tk.Button(
             button_frame,
@@ -92,29 +102,33 @@ class SimpleConfigGUI:
 
         main_frame.columnconfigure(0, weight=1)
 
-    ## Funzione pulsante avvia
     def on_submit(self):
         tracking_mode = self.algorithm_var.get()
 
         try:
             duration = int(self.duration_var.get())
-
-        except ValueError or duration < 0:
+        except ValueError:
             messagebox.showerror(
                 "Errore",
                 "La durata deve essere un numero intero e positivo."
             )
             return
 
-        # Crea configurazione e chiudi finestra
+        if duration < 0:  # fix del bug originale
+            messagebox.showerror(
+                "Errore",
+                "La durata deve essere un numero intero e positivo."
+            )
+            return
+
         self.result = GUIConfig(
             tracking_mode=tracking_mode,
-            duration=duration
+            duration=duration,
+            roi_enabled=self.roi_var.get()  # NUOVO
         )
         self.root.quit()
         self.root.destroy()
 
-    ## Funzione annulla
     def on_cancel(self):
         self.result = None
         self.root.quit()
@@ -131,5 +145,6 @@ if __name__ == "__main__":
     if config:
         print(f"Configurazione ricevuta:")
         print(f"Tracking Mode: {config.tracking_mode}, Duration: {config.duration}")
+        print(f"ROI abilitata: {config.roi_enabled}")  # NUOVO
     else:
         print("Configurazione annullata")
