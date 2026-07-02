@@ -197,8 +197,8 @@ class SessionManager:
         if not xml_path or not os.path.exists(xml_path):
             print(f"\n{'!' * 70}")
             print(f"ATTENZIONE: Ground Truth non trovato!")
-            print(f"   Path: {xml_path}")
-            print(f"   Esiste: {os.path.exists(xml_path) if xml_path else 'N/A'}")
+            print(f"Path: {xml_path}")
+            print(f"Esiste: {os.path.exists(xml_path) if xml_path else 'N/A'}")
             print(f"Le metriche di tracking NON saranno affidabili!")
             print(f"{'!' * 70}\n")
             return None
@@ -241,11 +241,11 @@ class SessionManager:
             if gt_by_frame:
                 frame_ids = sorted(gt_by_frame.keys())
                 print(f"Ground Truth caricato con successo!")
-                print(f"  • Frame annotati:        {len(gt_by_frame)}")
-                print(f"  • Totale annotazioni:    {total_annotations}")
-                print(f"  • Track ID unici:        {len(unique_track_ids)}")
-                print(f"  • Media obj/frame:       {total_annotations / len(gt_by_frame):.2f}")
-                print(f"  • Frame range:           {min(frame_ids)} → {max(frame_ids)}")
+                print(f" • Frame annotati:        {len(gt_by_frame)}")
+                print(f" • Totale annotazioni:    {total_annotations}")
+                print(f" • Track ID unici:        {len(unique_track_ids)}")
+                print(f" • Media obj/frame:       {total_annotations / len(gt_by_frame):.2f}")
+                print(f" • Frame range:           {min(frame_ids)} → {max(frame_ids)}")
                 print(f"{'─' * 70}\n")
             else:
                 print(f"XML caricato ma nessuna annotazione trovata!")
@@ -262,7 +262,7 @@ class SessionManager:
             return None
 
     def _initialize_files(self):
-        # Salva configurazione in JSON (ora include nuovi parametri)
+        # Salva configurazione in JSON
         with open(self.config_path, 'w') as f:
             json.dump(asdict(self.config), f, indent=2)
         print(f"✓ Config salvata: {self.config_path}")
@@ -277,7 +277,7 @@ class SessionManager:
                 'num_tracks',
                 'frame_number'
             ])
-        print(f"✓ Metrics CSV creato: {self.metrics_path}")
+        print(f"Metrics CSV creato: {self.metrics_path}")
 
         # Crea CSV tracks con header
         with open(self.tracks_path, 'w', newline='') as f:
@@ -350,7 +350,6 @@ class SessionManager:
             self._flush_tracks()
 
     def finalize_frame(self, frame_number: int):
-        # Se non abbiamo GT caricato, non possiamo calcolare metriche
         if not self.gt_annotations:
             print(f"Frame {frame_number}: Nessun GT disponibile - skip metriche")
             self.current_frame_tracks = []
@@ -369,7 +368,6 @@ class SessionManager:
             self.current_frame_tracks = []
             return
 
-        # Frame ha GT - procediamo con il calcolo
         self.frames_with_gt += 1
 
         if self.current_frame_tracks:
