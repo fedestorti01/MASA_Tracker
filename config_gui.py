@@ -7,13 +7,13 @@ from typing import Optional
 class GUIConfig:
     tracking_mode: str
     duration: int
-    roi_enabled: bool  # NUOVO
+    roi_enabled: bool
 
 class SimpleConfigGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Configurazione Tracking")
-        self.root.geometry("450x250")  # altezza aumentata
+        self.root.geometry("450x250")
         self.root.resizable(False, False)
         self._center_window()
         self.result: Optional[GUIConfig] = None
@@ -64,7 +64,6 @@ class SimpleConfigGUI:
         )
         self.duration_entry.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
 
-        # NUOVO: Checkbox ROI
         self.roi_var = tk.BooleanVar(value=False)
         self.roi_checkbox = ttk.Checkbutton(
             main_frame,
@@ -114,7 +113,7 @@ class SimpleConfigGUI:
             )
             return
 
-        if duration < 0:  # fix del bug originale
+        if duration < 0:
             messagebox.showerror(
                 "Errore",
                 "La durata deve essere un numero intero e positivo."
@@ -124,7 +123,7 @@ class SimpleConfigGUI:
         self.result = GUIConfig(
             tracking_mode=tracking_mode,
             duration=duration,
-            roi_enabled=self.roi_var.get()  # NUOVO
+            roi_enabled=self.roi_var.get()
         )
         self.root.quit()
         self.root.destroy()
@@ -145,6 +144,6 @@ if __name__ == "__main__":
     if config:
         print(f"Configurazione ricevuta:")
         print(f"Tracking Mode: {config.tracking_mode}, Duration: {config.duration}")
-        print(f"ROI abilitata: {config.roi_enabled}")  # NUOVO
+        print(f"ROI abilitata: {config.roi_enabled}")
     else:
         print("Configurazione annullata")

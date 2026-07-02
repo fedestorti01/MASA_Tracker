@@ -5,44 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="48206a52-ba36-4e99-a847-f32d0d1ee007" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Sezione di strada.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Traffic_analyzer.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/config_roi.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/get_coordinates.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/MASATracker.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/MASATracker.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/config_gui.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/masa_subscriber.py" beforeDir="false" afterPath="$PROJECT_DIR$/masa_subscriber.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/botsort_camera20936_20260313_144855/config.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/botsort_camera20936_20260313_144855/metrics.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/botsort_camera20936_20260313_144855/tracking_metrics.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/botsort_camera20936_20260313_144855/tracks.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/bytetrack_camera20936_20260216_104628/config.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/bytetrack_camera20936_20260216_104628/metrics.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/bytetrack_camera20936_20260216_104628/tracking_metrics.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/bytetrack_camera20936_20260216_104628/tracks.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260205_183104/config.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260205_183104/metrics.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260205_183104/tracking_metrics.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260205_183104/tracks.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260210_185203/config.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260210_185203/metrics.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260210_185203/tracking_metrics.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260210_185203/tracks.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260210_185451/config.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260210_185451/metrics.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260210_185451/tracking_metrics.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260210_185451/tracks.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260211_200029/config.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260211_200029/metrics.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260211_200029/tracking_metrics.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/deepsort_camera20936_20260211_200029/tracks.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/session_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/session_manager.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -96,6 +60,18 @@
       <workItem from="1777454675450" duration="6810000" />
       <workItem from="1777533306462" duration="7616000" />
       <workItem from="1777799793884" duration="309000" />
+      <workItem from="1778246970961" duration="1063000" />
+      <workItem from="1778426258304" duration="405000" />
+      <workItem from="1779526579273" duration="630000" />
+      <workItem from="1780411175976" duration="654000" />
+      <workItem from="1780911164041" duration="762000" />
+      <workItem from="1781085140058" duration="1426000" />
+      <workItem from="1781420176545" duration="785000" />
+      <workItem from="1781450041279" duration="621000" />
+      <workItem from="1781798490330" duration="782000" />
+      <workItem from="1781944254057" duration="1290000" />
+      <workItem from="1782112011622" duration="1219000" />
+      <workItem from="1782972809989" duration="350000" />
     </task>
     <servers />
   </component>
